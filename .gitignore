@@ -67,3 +67,15 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# Logger output
+logs.txt
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+
+.vscode/
