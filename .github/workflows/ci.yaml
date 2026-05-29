@@ -27,6 +27,11 @@ jobs:
             ninja-build \
             ccache
 
+      - name: Install GCC 14
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14
+
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
@@ -35,9 +40,10 @@ jobs:
             ${{ runner.os }}-${{ matrix.build_type }}-
 
       - name: Configure CMake
-        # We pass the matrix variables into CMake
         run: >
           cmake -B build -G Ninja
+          -DCMAKE_CXX_COMPILER=g++-14 
+          -DCMAKE_C_COMPILER=gcc-14
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
