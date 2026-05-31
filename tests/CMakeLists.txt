@@ -6,7 +6,7 @@ add_executable(test_worker manager/test_worker.cpp)
 
 target_link_libraries(test_jobs
     PRIVATE
-        spdlog::spdlog
+        logging_module
         Catch2::Catch2WithMain
 )
 
@@ -17,7 +17,7 @@ target_include_directories(test_jobs
 
 target_link_libraries(test_manager
     PRIVATE
-        spdlog::spdlog
+        logging_module
         Catch2::Catch2WithMain
 )
 
@@ -28,7 +28,7 @@ target_include_directories(test_manager
 
 target_link_libraries(test_worker
     PRIVATE
-        spdlog::spdlog
+        logging_module
         Catch2::Catch2WithMain
 )
 

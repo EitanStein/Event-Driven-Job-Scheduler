@@ -4,6 +4,7 @@
 #include <vector>
 #include <ranges>
 #include <unistd.h>
+#include <EventDrivenJobScheduler/utils/log_macros.hpp>
 
 
 class Worker{
@@ -21,6 +22,7 @@ public:
     [[nodiscard]] const std::vector<std::string>& getCommandArgs() const {return command_args;}
     
     void execute(){
+        LOG_INFO("executing command {}", command); // TODO add args in log?
         char* args[command_args.size() + 2];
 
         args[0] = command.data();

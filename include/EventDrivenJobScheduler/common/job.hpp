@@ -7,9 +7,10 @@
 
 struct Job{
     size_t id;
-    std::string command; // TODO interprent a string that gets  
+    std::string command; 
     std::string args_str;
     Resource resource_reqs;
+    // TODO priority - based on either client input or life length
 
     Job(std::string&& command, 
         std::string&& args_str, 

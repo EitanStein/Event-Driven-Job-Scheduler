@@ -2,10 +2,11 @@
 
 #include <catch2/catch_all.hpp>
 #include <catch2/catch_test_macros.hpp>
-
+#include "EventDrivenJobScheduler/utils/log_macros.hpp"
 #include "EventDrivenJobScheduler/manager/manager.hpp"
 
 TEST_CASE("Empty job queue", ""){
+    INIT_LOGGER();
     Manager manager;
     int status = manager.giveJobToWorker();
     REQUIRE(status == -1);
@@ -13,6 +14,7 @@ TEST_CASE("Empty job queue", ""){
 
 TEST_CASE("basic job", "")
 {
+    INIT_LOGGER();
     Manager manager;
     manager.addJob("sleep", "1");
     
@@ -23,6 +25,7 @@ TEST_CASE("basic job", "")
 
 TEST_CASE("multiple jobs", "")
 {
+    INIT_LOGGER();
     Manager manager;
     manager.addJob("echo", "1");
     manager.addJob("ls", "--version");
@@ -39,6 +42,7 @@ TEST_CASE("multiple jobs", "")
 
 TEST_CASE("multiple jobs with final invalid job", "")
 {
+    INIT_LOGGER();
     Manager manager;
     manager.addJob("echo", "1");
     manager.addJob("ls", "--version");

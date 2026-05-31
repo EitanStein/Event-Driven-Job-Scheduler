@@ -2,7 +2,7 @@
 
 #include <catch2/catch_all.hpp>
 #include <catch2/catch_test_macros.hpp>
-
+#include "EventDrivenJobScheduler/utils/log_macros.hpp"
 #include <unistd.h>
 #include <sys/wait.h>
 
@@ -11,6 +11,7 @@
 
 TEST_CASE("command split test", "")
 {
+    INIT_LOGGER();
     Worker worker("ls", "-l -a");
     REQUIRE(worker.getCommand() == "ls");
     REQUIRE(worker.getCommandArgs().size() == 2);
@@ -37,7 +38,7 @@ int fork_job(std::string&& command, std::string&& args){
 
 
 TEST_CASE("basic command execution test using fork", ""){
-
+    INIT_LOGGER();
     int status = fork_job("sleep", "1");
     REQUIRE(WIFEXITED(status));
     REQUIRE(WEXITSTATUS(status) == 0);

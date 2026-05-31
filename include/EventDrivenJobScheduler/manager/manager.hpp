@@ -3,8 +3,8 @@
 #include <vector>
 #include <queue>
 #include <EventDrivenJobScheduler/common/job.hpp>
+#include <EventDrivenJobScheduler/utils/log_macros.hpp>
 #include "worker.hpp"
-#include <print> // TODO replace with logger
 
 #include <unistd.h>
 #include <sys/wait.h>
@@ -25,6 +25,7 @@ public:
     }
 
     int giveJobToWorker(){
+        // TODO add log info
         if(pending_jobs.empty())
             return -1; // TODO return error value or throw error
 
@@ -33,7 +34,7 @@ public:
 
         pid_t pid = fork();
         if(pid < 0)
-            std::println("error with fork");
+            LOG_ERROR("fork failed"); // TODO reinsert job? give hob id?
         else if(pid == 0){
             // TODO maybe change state of job here so it overwrites CoW job memory
             // TODO think where to activate a worker here - right now it just forks from manager
