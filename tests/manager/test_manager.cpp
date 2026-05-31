@@ -14,9 +14,9 @@ TEST_CASE("Empty job queue", ""){
 TEST_CASE("basic job", "")
 {
     Manager manager;
-    manager.addJob("sleep 1");
+    manager.addJob("sleep", "1");
+    
     int status = manager.giveJobToWorker();
-
     REQUIRE(WIFEXITED(status));
     REQUIRE(WEXITSTATUS(status) == 0);
 }
@@ -24,11 +24,11 @@ TEST_CASE("basic job", "")
 TEST_CASE("multiple jobs", "")
 {
     Manager manager;
-    manager.addJob("echo 1");
-    manager.addJob("ls --version");
-    manager.addJob("ls -la");
-    int status = manager.giveJobToWorker();
+    manager.addJob("echo", "1");
+    manager.addJob("ls", "--version");
+    manager.addJob("ls", "-la");
 
+    int status = manager.giveJobToWorker();
     REQUIRE(WIFEXITED(status));
     REQUIRE(WEXITSTATUS(status) == 0);
 
@@ -40,11 +40,11 @@ TEST_CASE("multiple jobs", "")
 TEST_CASE("multiple jobs with final invalid job", "")
 {
     Manager manager;
-    manager.addJob("echo 1");
-    manager.addJob("ls --version");
-    manager.addJob("IDontExistProbably 45 45");
-    int status = manager.giveJobToWorker();
+    manager.addJob("echo", "1");
+    manager.addJob("ls", "--version");
+    manager.addJob("IDontExistProbably", "45 45");
 
+    int status = manager.giveJobToWorker();
     REQUIRE(WIFEXITED(status));
     REQUIRE(WEXITSTATUS(status) == 0);
 

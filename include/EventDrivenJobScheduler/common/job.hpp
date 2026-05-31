@@ -3,30 +3,35 @@
 #include <vector>
 #include <string>
 #include <ranges>
-#include <unistd.h>
+#include "resource.hpp"
 
-class Job{
-private:
-    std::vector<std::string> command_args;
+struct Job{
+    size_t id;
+    std::string command; // TODO interprent a string that gets  
+    std::string args_str;
+    Resource resource_reqs;
 
-public:
-    Job(std::string&& input){
-        command_args = input |
-                       std::views::split(' ') |
-                       std::ranges::to<std::vector<std::string>>();
-    }
-
-    const std::vector<std::string>& getCommandArgs() const {return command_args;}
-
-    void execute(){ // TODO move to worker (job should not execute on its own)
-        char* args[command_args.size() + 1];
-
-        for(size_t idx=0; auto& str_v : command_args){
-            args[idx] = str_v.data();
-            ++idx;
-        }
-        args[command_args.size()] = nullptr;
-
-        execvp(args[0], args);
-    }
+    Job(std::string&& command, 
+        std::string&& args_str, 
+        Resource resources) : 
+            id(0), 
+            command(std::move(command)),
+            args_str(std::move(args_str)),
+            resource_reqs(std::move(resources)) 
+    {}
+    Job(std::string&& command, 
+        std::string&& args_str) : 
+            id(0), 
+            command(std::move(command)),
+            args_str(std::move(args_str)),
+            resource_reqs({}) 
+    {}
+    
+    // TODO handle single command string and turn it into multiple values based on flags
+    // --exec, --args, --mem, --cpu
+    // Job(std::string&& input): input_str(str) {
+    //     std::vector<std::string> input_parts = input |
+    //                                             std::views::split(' ') |
+    //                                             std::ranges::to<std::vector<std::string>>();
+    // }
 };

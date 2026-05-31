@@ -3,6 +3,7 @@
 #include <vector>
 #include <queue>
 #include <EventDrivenJobScheduler/common/job.hpp>
+#include "worker.hpp"
 #include <print> // TODO replace with logger
 
 #include <unistd.h>
@@ -18,8 +19,9 @@ public:
         pending_jobs.push(std::move(job));
     }
 
-    void addJob(std::string&& input) {
-        pending_jobs.emplace(std::forward<std::string>(input));
+    void addJob(std::string&& command, std::string&& args) {
+        pending_jobs.emplace(std::forward<std::string>(command), 
+                             std::forward<std::string>(args));
     }
 
     int giveJobToWorker(){
@@ -35,7 +37,8 @@ public:
         else if(pid == 0){
             // TODO maybe change state of job here so it overwrites CoW job memory
             // TODO think where to activate a worker here - right now it just forks from manager
-            job.execute();
+            Worker worker(std::move(job.command), std::move(job.args_str));
+            worker.execute();
         }
         else{
             int status;
