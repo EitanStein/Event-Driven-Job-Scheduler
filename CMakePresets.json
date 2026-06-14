@@ -1,0 +1,45 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}"
+    },
+    {
+      "name": "debug",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "TRACY_ENABLE": "OFF",
+        "ENABLE_SANITIZERS": "OFF"
+      }
+    },
+    {
+      "name": "release",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "TRACY_ENABLE": "OFF",
+        "ENABLE_SANITIZERS": "OFF",
+        "BUILD_BENCHMARKS": "ON"
+      }
+    },
+    {
+      "name": "debug-san",
+      "inherits": "debug",
+      "cacheVariables": {
+        "ENABLE_SANITIZERS": "ON",
+        "ASAN_UBSAN": "ON"
+      }
+    },
+    {
+      "name": "debug-tracy",
+      "inherits": "debug",
+      "cacheVariables": {
+        "TRACY_ENABLE": "ON"
+      }
+    }
+  ]
+}

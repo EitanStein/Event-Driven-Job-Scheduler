@@ -79,3 +79,5 @@ Makefile
 
 
 .vscode/
+
+CMakeUserPresets.json
