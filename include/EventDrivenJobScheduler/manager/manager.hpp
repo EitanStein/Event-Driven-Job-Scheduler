@@ -3,6 +3,7 @@
 #include <vector>
 #include <deque>
 #include <queue>
+#include <unordered_set>
 #include <EventDrivenJobScheduler/common/job.hpp>
 #include <EventDrivenJobScheduler/utils/log_macros.hpp>
 #include "worker.hpp"
@@ -12,8 +13,8 @@
 
 
 struct JobQueue{
-    std::queue<Job> asap_jobs;
-    std::array<std::deque<Job>, static_cast<size_t>(Priority::NUM_PRIORITIES)> urgency_based_queues;
+    std::queue<Job> asap_jobs{};
+    std::array<std::deque<Job>, static_cast<size_t>(Priority::NUM_PRIORITIES)> urgency_based_queues{};
 
     [[nodiscard]] bool empty() const{
         if(!asap_jobs.empty())
@@ -95,9 +96,9 @@ struct JobQueue{
 
 
 class Manager{
-    //std::vector<pid_t> active_workers; // TODO const limit? and maybe use array?
-    JobQueue pending_jobs;
-    Resource available_resource;
+    Resource available_resource{};
+    std::unordered_map<pid_t, Resource> active_workers{};
+    JobQueue pending_jobs{};
 
     [[nodiscard]] pid_t forkJob(Job&& job) const{
         pid_t pid = fork();
@@ -114,6 +115,11 @@ class Manager{
     }
 
 public:
+    Manager() {}
+    Manager(Resource max_resources) : available_resource(max_resources) {}
+    
+
+    // TODO what happens if a job is added that requires more resources than the manager can afford?
     void addJob(Job&& job, Priority priority=Priority::LOW) {
         pending_jobs.push(std::move(job), priority);
     }
@@ -122,24 +128,59 @@ public:
         addJob(Job{std::forward<std::string>(command), std::forward<std::string>(args)});
     }
 
-    [[nodiscard]] int giveJobToWorker(){
-        LOG_INFO("assinging job to worker");
+    [[nodiscard]] bool giveJobToWorker(){
+        LOG_DEBUG("assinging job to worker");
 
         if(pending_jobs.empty()){
-            LOG_WARN("empty job queue");
-            return -1;
+            LOG_DEBUG("giveJobToWorker: empty job queue");
+            return false;
         }
 
-        pid_t pid = -1;
-        if(std::optional<Job> job = pending_jobs.pop(available_resource))
-            pid = forkJob(std::move(job.value()));
-
-        if(pid < 0)
-            return -1;
+        if(std::optional<Job> job = pending_jobs.pop(available_resource)){
+            Resource reqs = job.value().resource_reqs;
+            available_resource -= job.value().resource_reqs;
+            // TODO if forks fail we lose the job - change to front + pop like a queue
+            pid_t pid = forkJob(std::move(job.value()));
+            if(pid <= 0)
+                return false;
+            LOG_INFO("forked process child {}", pid);
+            // TODO check if it needs std::in_place or something else for in place construction
+            // not a big deal in this case but its a good concept to know
+            active_workers[pid] = reqs;
+            return true;
+        }
         
-        int status;
-        waitpid(pid, &status, 0);
-        return status;
+        LOG_INFO("giveJobToWorker: not enough resources");
+        return false;
+    }
+
+    void handleFinishedWorker(pid_t pid){
+        LOG_INFO("process child {} finished", pid);
+        if(active_workers.find(pid) == active_workers.end()){
+            LOG_DEBUG("cant find {}", pid);
+            return;
+        }
+
+        available_resource += active_workers.at(pid);
+        active_workers.erase(pid);
+    }
+
+    void main_loop(std::vector<Job>& jobs){
+        // TODO currently using waitpid - change to signalfd later
+        for(auto& job : jobs){
+            addJob(std::move(job));
+        }
+
+        while(!pending_jobs.empty() || !active_workers.empty()){
+            if(!pending_jobs.empty() && giveJobToWorker())
+                continue;
+            int status;
+            pid_t pid = waitpid(-1, &status, 0);
+            if(pid == 0)
+                continue;
+            handleFinishedWorker(pid);
+        }
+        
     }
     
 };

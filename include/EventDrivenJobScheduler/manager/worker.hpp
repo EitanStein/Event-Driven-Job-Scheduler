@@ -33,5 +33,8 @@ public:
         args[command_args.size() + 1] = nullptr;
 
         execvp(args[0], args);
+
+        LOG_ERROR("execvp failed");
+        _exit(1); 
     }
 };
