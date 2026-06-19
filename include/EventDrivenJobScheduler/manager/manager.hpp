@@ -10,6 +10,33 @@
 
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/signalfd.h>
+
+// TODO check std::signal
+struct SingalHandler{
+    sigset_t mask;
+    int fd;
+
+    SingalHandler() {
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGCHLD);
+        // TODO add signal for job additions
+
+        if(sigprocmask(SIG_BLOCK, &mask, nullptr) == -1)
+            LOG_ERROR("sigprocmask error");
+
+        fd = signalfd(-1, &mask, SFD_CLOEXEC);
+    }
+
+    void waitForRead(){
+        signalfd_siginfo siginfo;
+
+        ssize_t size = read(fd, &siginfo, sizeof(siginfo));
+
+        // TODO handle client reads
+        // right now reaching here means child processes finished
+    }
+};
 
 
 struct JobQueue{
@@ -99,6 +126,7 @@ class Manager{
     Resource available_resource{};
     std::unordered_map<pid_t, Resource> active_workers{};
     JobQueue pending_jobs{};
+    SingalHandler sig_handler{};
 
     [[nodiscard]] pid_t forkJob(Job&& job) const{
         pid_t pid = fork();
@@ -172,13 +200,16 @@ public:
         }
 
         while(!pending_jobs.empty() || !active_workers.empty()){
-            if(!pending_jobs.empty() && giveJobToWorker())
-                continue;
+            sig_handler.waitForRead();
+
+            // release resources of finished child processes
             int status;
-            pid_t pid = waitpid(-1, &status, 0);
-            if(pid == 0)
-                continue;
-            handleFinishedWorker(pid);
+            pid_t pid = 0;
+            while((pid = waitpid(-1, &status, WNOHANG)) > 0){
+                handleFinishedWorker(pid);
+            }
+            // send new jobs to children
+            while(giveJobToWorker()) {}
         }
         
     }
