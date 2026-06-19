@@ -5,6 +5,10 @@
 #include "EventDrivenJobScheduler/utils/log_macros.hpp"
 #include "EventDrivenJobScheduler/manager/manager.hpp"
 
+void wait_for_remaining_processes(){
+
+}
+
 TEST_CASE("Empty job queue", ""){
     INIT_LOGGER();
     Manager manager;
@@ -42,7 +46,7 @@ TEST_CASE("multiple jobs with final invalid job", "")
 
     REQUIRE(manager.giveJobToWorker());
     REQUIRE(manager.giveJobToWorker());
-    // REQUIRE(manager.giveJobToWorker());
+    REQUIRE(manager.giveJobToWorker());
 }
 
 
