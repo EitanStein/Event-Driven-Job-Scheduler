@@ -5,9 +5,6 @@
 #include "EventDrivenJobScheduler/utils/log_macros.hpp"
 #include "EventDrivenJobScheduler/manager/manager.hpp"
 
-void wait_for_remaining_processes(){
-
-}
 
 TEST_CASE("Empty job queue", ""){
     INIT_LOGGER();
