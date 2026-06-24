@@ -145,6 +145,24 @@ class Manager{
 public:
     Manager() {}
     Manager(Resource max_resources) : available_resource(max_resources) {}
+
+    ~Manager() {
+        for(auto worker : active_workers){
+            kill(worker.first, SIGTERM);
+        }
+
+        int status;
+        pid_t pid = 0;
+
+        while((pid = waitpid(-1, &status, WNOHANG)) > 0){
+            handleFinishedWorker(pid);
+        }
+
+        for(auto worker : active_workers){
+            kill(worker.first, SIGKILL);
+            waitpid(worker.first, nullptr, 0);
+        }
+    }
     
 
     // TODO what happens if a job is added that requires more resources than the manager can afford?
