@@ -4,6 +4,7 @@
 #include <deque>
 #include <queue>
 #include <unordered_set>
+
 #include <EventDrivenJobScheduler/common/job.hpp>
 #include <EventDrivenJobScheduler/utils/log_macros.hpp>
 #include "worker.hpp"
@@ -11,30 +12,148 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/signalfd.h>
+#include <poll.h>
 
+#include <netinet/in.h>
+#include <sys/socket.h>
+
+struct Doorbell{
+    pollfd fd;
+    sockaddr_in address{};
+
+    Doorbell() : fd(socket(AF_INET, SOCK_STREAM, 0)), address({}){
+        address.sin_family = AF_INET;
+        address.sin_port = htons(8080);
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    }
+};
+
+constexpr int CLIENT_BACKLOG = 10;
+typedef std::string JobMsg;
 // TODO check std::signal
 struct SingalHandler{
-    sigset_t mask;
-    int fd;
+    enum Signal {Terminate, Worker, Client, Ignore};
+    sockaddr_in doorbell_address{};
+    std::vector<pollfd> fd_vec{};
 
     SingalHandler() {
-        sigemptyset(&mask);
-        sigaddset(&mask, SIGCHLD);
-        // TODO add signal for job additions
+        sigset_t mask_for_wroker_fd;
+        sigemptyset(&mask_for_wroker_fd);
+        sigaddset(&mask_for_wroker_fd, SIGCHLD);
+        sigaddset(&mask_for_wroker_fd, SIGINT);
+        sigaddset(&mask_for_wroker_fd, SIGTERM);
 
-        if(sigprocmask(SIG_BLOCK, &mask, nullptr) == -1)
-            LOG_ERROR("sigprocmask error");
+        if(sigprocmask(SIG_BLOCK, &mask_for_wroker_fd, nullptr) == -1)
+            throw std::runtime_error("SingalHandler: sigprocmask error");
+        
+        fd_vec.emplace_back();
+        fd_vec[0].fd = signalfd(-1, &mask_for_wroker_fd, SFD_CLOEXEC);
+        if(fd_vec[0].fd == -1){
+            throw std::runtime_error("SingalHandler: signalfd creation failed");
+        }
 
-        fd = signalfd(-1, &mask, SFD_CLOEXEC);
+        fd_vec.emplace_back();
+        fd_vec[1].fd = socket(AF_INET, SOCK_STREAM, 0);
+        doorbell_address.sin_family = AF_INET;
+        doorbell_address.sin_port = htons(8080);
+        doorbell_address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        if(bind(fd_vec[1].fd, reinterpret_cast<struct sockaddr*>(&doorbell_address), sizeof(doorbell_address)) < 0){
+            close(fd_vec[0].fd);
+            throw std::runtime_error("SingalHandler: doorbell bind failed");
+        }
+
+        if(listen(fd_vec[1].fd, CLIENT_BACKLOG) < 0){
+            close(fd_vec[0].fd);
+            close(fd_vec[1].fd);
+            throw std::runtime_error("SingalHandler: listen failed");
+        }
+            
     }
 
-    void waitForRead(){
+    ~SingalHandler(){
+        for(auto fd : fd_vec){
+            close(fd.fd);
+        }
+    }
+
+    void acceptNewClient(){
+        socklen_t address_len;
+        int new_client_fd = accept(fd_vec[1].fd, 
+                                    reinterpret_cast<struct sockaddr*>(&doorbell_address),
+                                    &address_len);
+
+        if(new_client_fd < 0)
+            LOG_ERROR("waitForSignal: accept: failed to connect to new client request");
+        else{
+            LOG_INFO("new client fd received: {}", new_client_fd);
+            fd_vec.emplace_back();
+            fd_vec.back().fd = new_client_fd;
+        }
+    }
+
+    [[nodiscard]] Signal getWorkerSignal(){
         signalfd_siginfo siginfo;
 
-        ssize_t size = read(fd, &siginfo, sizeof(siginfo));
+        ssize_t size = read(fd_vec[0].fd, &siginfo, sizeof(siginfo));
 
-        // TODO handle client reads
-        // right now reaching here means child processes finished
+        if(siginfo.ssi_signo == SIGCHLD){
+            LOG_INFO("child signal received");
+            return Signal::Worker;
+        }
+        else if (siginfo.ssi_signo == SIGINT || siginfo.ssi_signo == SIGTERM){
+            LOG_INFO("Termination signal received");
+            return Signal::Terminate;
+        }
+
+        LOG_ERROR("worker signal recieved was an unknown signal {}", siginfo.ssi_signo);
+        return Signal::Worker;
+    }
+
+    [[nodiscard]] JobMsg getJobData(int fd, int msg_size){
+        std::vector<char> buffer(msg_size);
+        read(fd, buffer.data(), msg_size);
+
+        return std::string{buffer.data()};
+    }
+
+    [[nodiscard]] std::pair<Signal, std::string> waitForSignal(){
+        int ready = poll(fd_vec.data(), fd_vec.size(), -1);
+
+        if(fd_vec[0].revents && POLLIN){
+            // worker finished or received temination signal
+            std::pair<Signal, std::string> result{getWorkerSignal(), ""};
+            return result;
+            
+        }
+        else if(fd_vec[1].revents && POLLIN){
+            acceptNewClient();
+        }
+        else{
+            int fd_idx=2;
+            while(fd_idx < fd_vec.size()){
+                if(fd_vec[fd_idx].revents && POLLIN)
+                    break;
+                ++fd_idx;
+            }
+            if(fd_idx == fd_vec.size()){
+                LOG_ERROR("poll returned a singal but didnt match any fd event");
+                return {Signal::Ignore, ""};
+            }
+
+            int msg_size = 0;
+            ssize_t size = read(fd_vec[fd_idx].fd, &msg_size, sizeof(int));
+            if(size == 0){
+                LOG_INFO("close connection to client with fd {}", fd_vec[fd_idx].fd);
+                close(fd_vec[fd_idx].fd);
+                fd_vec.erase(fd_vec.begin() + fd_idx);
+            }
+            else{
+                std::pair<Signal, std::string> result{Signal::Client, getJobData(fd_vec[fd_idx].fd, msg_size)};
+                return result;
+            }   
+        }
+
+        return {Signal::Ignore, ""};
     }
 };
 
@@ -211,21 +330,27 @@ public:
         active_workers.erase(pid);
     }
 
-    void main_loop(std::vector<Job>& jobs){
-        // TODO currently using waitpid - change to signalfd later
-        for(auto& job : jobs){
-            addJob(std::move(job));
-        }
-
+    void main_loop(){
         while(!pending_jobs.empty() || !active_workers.empty()){
-            sig_handler.waitForRead();
+            auto signal = sig_handler.waitForSignal();
+            if(signal.first == SingalHandler::Signal::Ignore){
+                continue;
+            }
+            else if(signal.first == SingalHandler::Signal::Worker){
+                int status;
+                pid_t pid = 0;
+                while((pid = waitpid(-1, &status, WNOHANG)) > 0){
+                    handleFinishedWorker(pid);
+                }
+            }
+            else if(signal.first == SingalHandler::Signal::Client){
+                addJob(Job(std::move(signal.second)));
+            }
+            else
+                break;
 
             // release resources of finished child processes
-            int status;
-            pid_t pid = 0;
-            while((pid = waitpid(-1, &status, WNOHANG)) > 0){
-                handleFinishedWorker(pid);
-            }
+            
             // send new jobs to children
             while(giveJobToWorker()) {}
         }
