@@ -331,7 +331,7 @@ public:
     }
 
     void main_loop(){
-        while(!pending_jobs.empty() || !active_workers.empty()){
+        while(!pending_jobs.empty() || !active_workers.empty()){ // TODO change for terminate signal
             auto signal = sig_handler.waitForSignal();
             if(signal.first == SingalHandler::Signal::Ignore){
                 continue;
