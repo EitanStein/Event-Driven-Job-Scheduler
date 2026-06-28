@@ -6,9 +6,44 @@
 #include "resource.hpp"
 #include "EventDrivenJobScheduler/utils/log_macros.hpp"
 
-enum class Priority{HIGH=0, MED, LOW, NUM_PRIORITIES, ASAP=0};
+enum class Priority{HIGH=0, MED, LOW, NUM_PRIORITIES, ASAP};
 
 struct Job{
+    enum Option {exec, args, mem, cpu, none};
+private:
+    Option getOption(std::string_view str){
+        if(str == "--exec")
+            return Option::exec;
+        else if(str == "--args")
+            return Option::args;
+        else if(str == "--mem")
+            return Option::mem;
+        else if(str == "--cpu")
+            return Option::cpu;
+        else
+            LOG_ERROR("unfamiliar argument: {}", str);
+        return Option::none;
+    }
+
+    void fillJobInfo(std::string&& val, Option option){
+        switch(option){
+            case Option::exec:
+                command = std::move(val);
+                break;
+            case Option::args:
+                args_str = std::move(val);
+                break;
+            case Option::mem:
+                resource_reqs.memory = std::stoi(val);
+                break;
+            case Option::cpu:
+                resource_reqs.cpu = std::stoi(val);
+                break;
+        }
+    }
+public:
+    
+
     std::string command; 
     std::string args_str;
     Resource resource_reqs;
@@ -39,52 +74,22 @@ struct Job{
             timestamp(timestamp)
     {
         auto input_parts = input |
-            std::views::split(' ') |
-            std::ranges::to<std::vector<std::string>>() |
-            std::views::filter([](std::string& str){ return str.size() > 0;});
-
-        enum class Option {exec, args, mem, cpu, none};
-        Option next_val = Option::none;
-        for(auto& input_part : input_parts){
-            if(input_part == "")
-                continue;
-            switch(next_val){
-                case Option::none:
-                    if(input_part == "--exec")
-                        next_val = Option::exec;
-                    else if(input_part == "--args")
-                        next_val = Option::args;
-                    else if(input_part == "--mem")
-                        next_val = Option::mem;
-                    else if(input_part == "--cpu")
-                        next_val = Option::cpu;
-                    else
-                        LOG_ERROR("unfamiliar argument: {}", input_part);
-                    continue;
-
-                case Option::exec:
-                    command = std::move(input_part);
-                    break;
-                case Option::args:
-                    args_str = std::move(input_part);
-                    break;
-                case Option::mem:
-                    resource_reqs.memory = std::stoi(input_part);
-                    break;
-                case Option::cpu:
-                    resource_reqs.cpu = std::stoi(input_part);
-                    break;
-            }
-            next_val = Option::none;
+                        std::views::split(' ') |
+                        std::views::filter([](auto&& str){ return !std::ranges::empty(str);});
             
+
+        
+        Option next_val = Option::none;
+        for(auto&& input_token : input_parts){
+            if(next_val == Option::none){
+                std::string_view input_view(&*input_token.begin(), std::ranges::distance(input_token));
+                next_val = getOption(input_view);
+            }
+            else{
+                fillJobInfo(std::string{input_token.begin(), input_token.end()}, next_val);
+                next_val = Option::none;
+            }
         }
     }
-    
-    // TODO handle single command string and turn it into multiple values based on flags
-    // --exec, --args, --mem, --cpu
-    // Job(std::string&& input): input_str(str) {
-    //     std::vector<std::string> input_parts = input |
-    //                                             std::views::split(' ') |
-    //                                             std::ranges::to<std::vector<std::string>>();
-    // }
+
 };
