@@ -7,9 +7,10 @@
 #include <netinet/in.h>
 
 class Client{
+private:
     pollfd fd;
     sockaddr_in address{}; // TODO change to input arguments or ENV variables
-
+public:
     Client() : fd(socket(AF_INET, SOCK_STREAM, 0)) {
         address.sin_family = AF_INET;
         address.sin_port = htons(8080);
