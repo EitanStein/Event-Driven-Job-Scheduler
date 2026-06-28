@@ -7,7 +7,28 @@
 
 #include "EventDrivenJobScheduler/common/job.hpp"
 
-// TODO add test for correct init after proper construction function is made
-TEST_CASE("TODO add prper test for job", ""){
-    REQUIRE(1==1);
+
+TEST_CASE("job creation using command line", ""){
+    Job job("--exec sleep --args 1 --mem 3 --cpu 4");
+    REQUIRE(job.command == "sleep");
+    REQUIRE(job.args_str == "1");
+    REQUIRE(job.resource_reqs.memory == 3);
+    REQUIRE(job.resource_reqs.cpu == 4);
+}
+
+TEST_CASE("job creation using command line with excess spaces", ""){
+    Job job("--exec   sleep --args       1");
+    REQUIRE(job.command == "sleep");
+    REQUIRE(job.args_str == "1");
+    REQUIRE(job.resource_reqs.memory == 0);
+    REQUIRE(job.resource_reqs.cpu == 0);
+}
+
+
+TEST_CASE("job creation using unordered command", ""){
+    Job job("--args 1 --mem 3 --exec   sleep --cpu       1");
+    REQUIRE(job.command == "sleep");
+    REQUIRE(job.args_str == "1");
+    REQUIRE(job.resource_reqs.memory == 3);
+    REQUIRE(job.resource_reqs.cpu == 1);
 }

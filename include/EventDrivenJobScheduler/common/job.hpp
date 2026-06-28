@@ -38,9 +38,10 @@ struct Job{
             resource_reqs(), 
             timestamp(timestamp)
     {
-        std::vector<std::string> input_parts = input |
-                                                std::views::split(' ') |
-                                                std::ranges::to<std::vector<std::string>>();
+        auto input_parts = input |
+            std::views::split(' ') |
+            std::ranges::to<std::vector<std::string>>() |
+            std::views::filter([](std::string& str){ return str.size() > 0;});
 
         enum class Option {exec, args, mem, cpu, none};
         Option next_val = Option::none;
@@ -73,9 +74,8 @@ struct Job{
                 case Option::cpu:
                     resource_reqs.cpu = std::stoi(input_part);
                     break;
-
-                next_val = Option::none;
             }
+            next_val = Option::none;
             
         }
     }
