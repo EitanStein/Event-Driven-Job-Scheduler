@@ -69,7 +69,7 @@ Testing/
 .cache/
 
 # Logger output
-logs.txt
+*logs.txt
 
 # CMake generated files
 CMakeFiles/

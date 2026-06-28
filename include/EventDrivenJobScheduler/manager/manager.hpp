@@ -48,16 +48,18 @@ struct SingalHandler{
         
         fd_vec.emplace_back();
         fd_vec[0].fd = signalfd(-1, &mask_for_wroker_fd, SFD_CLOEXEC);
+        fd_vec[0].events = POLLIN;
         if(fd_vec[0].fd == -1){
             throw std::runtime_error("SingalHandler: signalfd creation failed");
         }
 
         fd_vec.emplace_back();
         fd_vec[1].fd = socket(AF_INET, SOCK_STREAM, 0);
+        fd_vec[1].events = POLLIN;
         doorbell_address.sin_family = AF_INET;
         doorbell_address.sin_port = htons(8080);
         doorbell_address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        if(bind(fd_vec[1].fd, reinterpret_cast<struct sockaddr*>(&doorbell_address), sizeof(doorbell_address)) < 0){
+        if(bind(fd_vec[1].fd, reinterpret_cast<struct sockaddr*>(&doorbell_address), (socklen_t)sizeof(doorbell_address)) < 0){
             close(fd_vec[0].fd);
             throw std::runtime_error("SingalHandler: doorbell bind failed");
         }
@@ -77,10 +79,10 @@ struct SingalHandler{
     }
 
     void acceptNewClient(){
-        socklen_t address_len;
+        size_t address_len = sizeof(doorbell_address);
         int new_client_fd = accept(fd_vec[1].fd, 
                                     reinterpret_cast<struct sockaddr*>(&doorbell_address),
-                                    &address_len);
+                                    (socklen_t*)&address_len);
 
         if(new_client_fd < 0)
             LOG_ERROR("waitForSignal: accept: failed to connect to new client request");
@@ -88,6 +90,7 @@ struct SingalHandler{
             LOG_INFO("new client fd received: {}", new_client_fd);
             fd_vec.emplace_back();
             fd_vec.back().fd = new_client_fd;
+            fd_vec.back().events = POLLIN;
         }
     }
 
@@ -109,15 +112,19 @@ struct SingalHandler{
         return Signal::Worker;
     }
 
-    [[nodiscard]] JobMsg getJobData(int fd, int msg_size){
+    [[nodiscard]] JobMsg getJobData(int fd, u_int32_t msg_size){
         std::vector<char> buffer(msg_size);
+        LOG_DEBUG("manager receiving job msg of size: {}", msg_size);
         read(fd, buffer.data(), msg_size);
+        LOG_DEBUG("manager received job info: {}", std::string{buffer.data()});
 
         return std::string{buffer.data()};
     }
 
     [[nodiscard]] std::pair<Signal, std::string> waitForSignal(){
+        LOG_DEBUG("Polling...");
         int ready = poll(fd_vec.data(), fd_vec.size(), -1);
+        LOG_DEBUG("Poll successful");
 
         if(fd_vec[0].revents && POLLIN){
             // worker finished or received temination signal
@@ -140,15 +147,15 @@ struct SingalHandler{
                 return {Signal::Ignore, ""};
             }
 
-            int msg_size = 0;
-            ssize_t size = read(fd_vec[fd_idx].fd, &msg_size, sizeof(int));
+            u_int32_t msg_size = 0;
+            ssize_t size = read(fd_vec[fd_idx].fd, &msg_size, sizeof(msg_size));
             if(size == 0){
                 LOG_INFO("close connection to client with fd {}", fd_vec[fd_idx].fd);
                 close(fd_vec[fd_idx].fd);
                 fd_vec.erase(fd_vec.begin() + fd_idx);
             }
             else{
-                std::pair<Signal, std::string> result{Signal::Client, getJobData(fd_vec[fd_idx].fd, msg_size)};
+                std::pair<Signal, std::string> result{Signal::Client, getJobData(fd_vec[fd_idx].fd, ntohl(msg_size))};
                 return result;
             }   
         }
@@ -330,26 +337,33 @@ public:
         active_workers.erase(pid);
     }
 
-    void main_loop(){
-        while(!pending_jobs.empty() || !active_workers.empty()){ // TODO change for terminate signal
-            auto signal = sig_handler.waitForSignal();
-            if(signal.first == SingalHandler::Signal::Ignore){
-                continue;
-            }
-            else if(signal.first == SingalHandler::Signal::Worker){
-                int status;
-                pid_t pid = 0;
-                while((pid = waitpid(-1, &status, WNOHANG)) > 0){
-                    handleFinishedWorker(pid);
-                }
-            }
-            else if(signal.first == SingalHandler::Signal::Client){
-                addJob(Job(std::move(signal.second)));
-            }
-            else
-                break;
+    [[nodiscard]] SingalHandler::Signal handleSignal(){
+        auto signal = sig_handler.waitForSignal();
 
-            // release resources of finished child processes
+        if(signal.first == SingalHandler::Signal::Worker){
+            int status;
+            pid_t pid = 0;
+            while((pid = waitpid(-1, &status, WNOHANG)) > 0){
+                handleFinishedWorker(pid);
+            }
+        }
+        else if(signal.first == SingalHandler::Signal::Client){
+            addJob(Job(std::move(signal.second)));
+        }
+        
+        return signal.first;
+    }
+
+    void mainLoop(){
+        LOG_DEBUG("starting main loop");
+        while(true){ 
+            LOG_DEBUG("waiting for signal");
+            SingalHandler::Signal signal = handleSignal();
+            LOG_DEBUG("signal handled");
+            if(signal == SingalHandler::Signal::Terminate)
+                break;
+            else if(signal == SingalHandler::Signal::Ignore)
+                continue;
             
             // send new jobs to children
             while(giveJobToWorker()) {}

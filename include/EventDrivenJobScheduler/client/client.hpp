@@ -21,18 +21,28 @@ public:
         close(fd.fd);
     }
 
-    int Connect(){
-        int result = connect(fd.fd, reinterpret_cast<sockaddr*>(&address), sizeof(address));
-        if(result < 0)
+    [[nodiscard]] CommStatus connectToManager(){
+        if(connect(fd.fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) < 0){
             LOG_ERROR("Client failed to connect to manager");
-
-        return result;
+            return CommStatus::Fail;
+        }
+            
+        LOG_INFO("Client connected to manager");
+        return CommStatus::Success;
     }
 
-    int SendCommand(MsgFormat&& msg){
-        if(write(fd.fd, msg.GetMsg().data(), msg.GetTotSize()) < 0)
-            LOG_ERROR("failed to send message");
-    }
+    [[nodiscard]] CommStatus sendCommand(MsgFormat&& msg){
+        auto to_send_msg_size =  htonl(msg.msg_size);
+        if(write(fd.fd, &to_send_msg_size, sizeof(msg.msg_size)) < 0){
+            LOG_ERROR("Client failed to send message");
+            return CommStatus::Fail;
+        }
+        if(write(fd.fd, msg.payload.data(), msg.msg_size) < 0){
+            LOG_ERROR("Client failed to send message");
+            return CommStatus::Fail;
+        }
 
-    
+        LOG_INFO("Client sent a message");
+        return CommStatus::Success;
+    }
 };
