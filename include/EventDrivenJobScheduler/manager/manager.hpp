@@ -31,12 +31,12 @@ struct Doorbell{
 constexpr int CLIENT_BACKLOG = 10;
 typedef std::string JobMsg;
 // TODO check std::signal
-struct SingalHandler{
+struct SignalHandler{
     enum Signal {Terminate, Worker, Client, Ignore};
     sockaddr_in doorbell_address{};
     std::vector<pollfd> fd_vec{};
 
-    SingalHandler() {
+    SignalHandler() {
         sigset_t mask_for_wroker_fd;
         sigemptyset(&mask_for_wroker_fd);
         sigaddset(&mask_for_wroker_fd, SIGCHLD);
@@ -44,13 +44,13 @@ struct SingalHandler{
         sigaddset(&mask_for_wroker_fd, SIGTERM);
 
         if(sigprocmask(SIG_BLOCK, &mask_for_wroker_fd, nullptr) == -1)
-            throw std::runtime_error("SingalHandler: sigprocmask error");
+            throw std::runtime_error("SignalHandler: sigprocmask error");
         
         fd_vec.emplace_back();
         fd_vec[0].fd = signalfd(-1, &mask_for_wroker_fd, SFD_CLOEXEC);
         fd_vec[0].events = POLLIN;
         if(fd_vec[0].fd == -1){
-            throw std::runtime_error("SingalHandler: signalfd creation failed");
+            throw std::runtime_error("SignalHandler: signalfd creation failed");
         }
 
         fd_vec.emplace_back();
@@ -61,18 +61,18 @@ struct SingalHandler{
         doorbell_address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         if(bind(fd_vec[1].fd, reinterpret_cast<struct sockaddr*>(&doorbell_address), (socklen_t)sizeof(doorbell_address)) < 0){
             close(fd_vec[0].fd);
-            throw std::runtime_error("SingalHandler: doorbell bind failed");
+            throw std::runtime_error("SignalHandler: doorbell bind failed");
         }
 
         if(listen(fd_vec[1].fd, CLIENT_BACKLOG) < 0){
             close(fd_vec[0].fd);
             close(fd_vec[1].fd);
-            throw std::runtime_error("SingalHandler: listen failed");
+            throw std::runtime_error("SignalHandler: listen failed");
         }
             
     }
 
-    ~SingalHandler(){
+    ~SignalHandler(){
         for(auto fd : fd_vec){
             close(fd.fd);
         }
@@ -252,7 +252,7 @@ class Manager{
     Resource available_resource{};
     std::unordered_map<pid_t, Resource> active_workers{};
     JobQueue pending_jobs{};
-    SingalHandler sig_handler{};
+    SignalHandler sig_handler{};
 
     [[nodiscard]] pid_t forkJob(Job&& job) const{
         pid_t pid = fork();
@@ -337,17 +337,17 @@ public:
         active_workers.erase(pid);
     }
 
-    [[nodiscard]] SingalHandler::Signal handleSignal(){
+    [[nodiscard]] SignalHandler::Signal handleSignal(){
         auto signal = sig_handler.waitForSignal();
 
-        if(signal.first == SingalHandler::Signal::Worker){
+        if(signal.first == SignalHandler::Signal::Worker){
             int status;
             pid_t pid = 0;
             while((pid = waitpid(-1, &status, WNOHANG)) > 0){
                 handleFinishedWorker(pid);
             }
         }
-        else if(signal.first == SingalHandler::Signal::Client){
+        else if(signal.first == SignalHandler::Signal::Client){
             addJob(Job(std::move(signal.second)));
         }
         
@@ -358,11 +358,11 @@ public:
         LOG_DEBUG("starting main loop");
         while(true){ 
             LOG_DEBUG("waiting for signal");
-            SingalHandler::Signal signal = handleSignal();
+            SignalHandler::Signal signal = handleSignal();
             LOG_DEBUG("signal handled");
-            if(signal == SingalHandler::Signal::Terminate)
+            if(signal == SignalHandler::Signal::Terminate)
                 break;
-            else if(signal == SingalHandler::Signal::Ignore)
+            else if(signal == SignalHandler::Signal::Ignore)
                 continue;
             
             // send new jobs to children
