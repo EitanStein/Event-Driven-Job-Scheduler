@@ -2,9 +2,9 @@
 
 #include "logger.hpp"
 
-void INIT_LOGGER() {
-    [[maybe_unused]] static bool initialized = []() {
-        Logger::Init();
+void INIT_LOGGER(std::string filename="") {
+    [[maybe_unused]] static bool initialized = [&]() {
+        Logger::Init(std::move(filename));
         return true;
     }();
 }

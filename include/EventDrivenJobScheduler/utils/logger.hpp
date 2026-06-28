@@ -8,10 +8,14 @@
 
 class Logger {
 public:
-    static void Init()
+    static void Init(std::string filename="")
     {
         auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-        auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("logs.txt", true);
+        std::shared_ptr<spdlog::sinks::basic_file_sink_mt> file_sink;
+        if(filename == "")
+            file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("logs.txt", true);
+        else
+            file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(filename, true);
 
         std::vector<spdlog::sink_ptr> sinks{console_sink, file_sink};
         s_logger = std::make_shared<spdlog::logger>("MainLogger", begin(sinks), end(sinks));
