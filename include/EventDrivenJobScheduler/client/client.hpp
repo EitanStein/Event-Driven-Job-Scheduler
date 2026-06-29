@@ -23,26 +23,26 @@ public:
 
     [[nodiscard]] CommStatus connectToManager(){
         if(connect(fd.fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) < 0){
-            LOG_ERROR("Client failed to connect to manager");
+            LOG_ERROR("failed to connect to manager");
             return CommStatus::Fail;
         }
             
-        LOG_INFO("Client connected to manager");
+        LOG_INFO("connection successful");
         return CommStatus::Success;
     }
 
     [[nodiscard]] CommStatus sendCommand(MsgFormat&& msg){
         auto to_send_msg_size =  htonl(msg.msg_size);
         if(write(fd.fd, &to_send_msg_size, sizeof(msg.msg_size)) < 0){
-            LOG_ERROR("Client failed to send message");
+            LOG_ERROR("failed to send message size");
             return CommStatus::Fail;
         }
         if(write(fd.fd, msg.payload.data(), msg.msg_size) < 0){
-            LOG_ERROR("Client failed to send message");
+            LOG_ERROR("failed to send message");
             return CommStatus::Fail;
         }
 
-        LOG_INFO("Client sent a message");
+        LOG_INFO("command sent successfully");
         return CommStatus::Success;
     }
 };

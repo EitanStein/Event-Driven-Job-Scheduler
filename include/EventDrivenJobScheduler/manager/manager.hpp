@@ -87,7 +87,7 @@ struct SignalHandler{
         if(new_client_fd < 0)
             LOG_ERROR("waitForSignal: accept: failed to connect to new client request");
         else{
-            LOG_INFO("new client fd received: {}", new_client_fd);
+            LOG_INFO("new client connected with fd: {}", new_client_fd);
             fd_vec.emplace_back();
             fd_vec.back().fd = new_client_fd;
             fd_vec.back().events = POLLIN;
@@ -100,7 +100,7 @@ struct SignalHandler{
         ssize_t size = read(fd_vec[0].fd, &siginfo, sizeof(siginfo));
 
         if(siginfo.ssi_signo == SIGCHLD){
-            LOG_INFO("child signal received");
+            LOG_INFO("worker signal received");
             return Signal::Worker;
         }
         else if (siginfo.ssi_signo == SIGINT || siginfo.ssi_signo == SIGTERM){
@@ -232,7 +232,7 @@ struct JobQueue{
     }
 
 
-    void UpdateJobPriorities(int timestamp){
+    void UpdateJobPriorities(int timestamp){ // TODO update
         constexpr int time_diff = 60;
         for(size_t i = 1; i < urgency_based_queues.size(); ++i){
             std::deque<Job>& job_queue = urgency_based_queues[i];
@@ -257,7 +257,7 @@ class Manager{
     [[nodiscard]] pid_t forkJob(Job&& job) const{
         pid_t pid = fork();
         if(pid < 0)
-            LOG_ERROR("fork failed"); // TODO reinsert job? give job id?
+            LOG_ERROR("job fork failed: {} {}", job.command, job.args_str); // TODO reinsert job? give job id?
         else if(pid == 0){
             // TODO maybe change state of job here so it overwrites CoW job memory
             // TODO think where to activate a worker here - right now it just forks from manager
@@ -355,11 +355,9 @@ public:
     }
 
     void mainLoop(){
-        LOG_DEBUG("starting main loop");
         while(true){ 
-            LOG_DEBUG("waiting for signal");
             SignalHandler::Signal signal = handleSignal();
-            LOG_DEBUG("signal handled");
+            
             if(signal == SignalHandler::Signal::Terminate)
                 break;
             else if(signal == SignalHandler::Signal::Ignore)
