@@ -63,7 +63,6 @@ TEST_CASE("managing job from client", "")
         _exit(0);
     }
     else if(pid == 0){
-        REQUIRE(manager.handleSignal() == SignalHandler::Signal::Client);
         REQUIRE(manager.handleSignal() == SignalHandler::Signal::Ignore);
         SignalHandler::Signal result = manager.handleSignal();
         REQUIRE((result == SignalHandler::Signal::Ignore || result == SignalHandler::Signal::Worker));

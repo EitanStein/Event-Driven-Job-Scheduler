@@ -121,6 +121,7 @@ struct SignalHandler{
         return std::string{buffer.data()};
     }
 
+    // TODO make each case return a unique signal even if most are ignored later
     [[nodiscard]] std::pair<Signal, std::string> waitForSignal(){
         LOG_DEBUG("Polling...");
         int ready = poll(fd_vec.data(), fd_vec.size(), -1);
